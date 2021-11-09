@@ -3,6 +3,7 @@ import AWS from 'aws-sdk';
 import { UploadPartOutput } from 'aws-sdk/clients/s3';
 import { readFile, writeFile } from 'fs/promises'
 import JSZip from 'jszip'
+import { gzip } from 'node-gzip'
 
 const s3 = new AWS.S3();
 
@@ -25,10 +26,10 @@ function createLine(template:string) : string {
       .replace(':::replace:::', `:::${uuidv4()}:::${uuidv4()}:::${uuidv4()}:::${uuidv4()}:::`)
       .replace(':::time:::', new Date().toISOString())
 }
-async function createLogFile() : Promise<Buffer> {
+async function createLogFile(repeat:number = 100) : Promise<Buffer> {
   const contents = (await readFile('./source.log')).toString();
   const lines = contents.split('\n')
-    .flatMap(l => Array.from({length: 100}, () => createLine(l)));
+    .flatMap(l => Array.from({length: repeat}, () => createLine(l)));
   return Buffer.from(lines.join('\n'))
 }
 
@@ -44,6 +45,11 @@ async function createLogZip(numFiles:number) : Promise<Buffer> {
   });
 }
 
+async function createLogGZip() : Promise<Buffer> {
+  const data = await createLogFile(2500);
+  return await gzip(data);
+}
+
 async function getChunk(data:Buffer, chunkSize:number, chunk:number) {
   const start = chunk * chunkSize;
   const end = start + chunkSize;
@@ -54,10 +60,9 @@ async function getChunk(data:Buffer, chunkSize:number, chunk:number) {
   }
 }
 
-async function uploadData(data:Buffer, id:String) : Promise<void> {
+async function multipartUploadData(data:Buffer, id:string, ContentType:string) : Promise<void> {
   const Bucket = 'jspitzig-cribl-test';
   const Key = `multipart-test/${id}`;
-  const ContentType = 'application/zip';
   const multiPartParams = { Bucket, Key, ContentType };  
   console.info('Creating multipart upload');
   const multipart = await s3.createMultipartUpload(multiPartParams).promise();
@@ -82,14 +87,33 @@ async function uploadData(data:Buffer, id:String) : Promise<void> {
   console.info(`Completed upload`);
 }
 
+async function simpleUploadData(data:Buffer, id:string, ContentType:string) : Promise<void> {
+  const Bucket = 'jspitzig-cribl-test';
+  const Key = `multipart-test/${id}`;
+  await s3.upload({
+    Bucket,
+    Key,
+    ContentType,
+    ContentLength:data.byteLength,
+    Body: data
+  }).promise()
+
+}
+
 // Multipart
 (async function main() {
   const uuid = uuidv4();
   console.info('Creating zip');
-  const zip = await createLogZip(25);
+  //const zip = await createLogZip(25);
+  const zip = await createLogGZip();
   console.info('Created zip');
   console.info('Uploading zip');
-  await uploadData(zip, `${uuid}.zip`);
+  //const fileName = `${uuid}.zip`;
+  const fileName = `${uuid}.gz`;
+  //const contentType = 'application/zip';
+  const contentType = 'application/gzip';
+  await simpleUploadData(zip, fileName, contentType);
+  // await multipartUploadData(zip, fileName, contentType);
   console.info('Uploaded zip');
 })().then(function () {
   console.log('Completed!');

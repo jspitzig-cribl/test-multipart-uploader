@@ -8,7 +8,8 @@ export interface Arguments {
   output?: string,
   uploadType: string,
   repeat: number,
-  workers: number
+  workers: number,
+  cleanupDelay?: string
 }
 
 export async function parseArgs():Promise<Arguments> {
@@ -43,6 +44,11 @@ export async function parseArgs():Promise<Arguments> {
       alias: 'o',
       type: 'string',
       description: 'Generate out to file only.  Directory to output to.',
+    })
+    .option('cleanupDelay', {
+      alias: 'd',
+      type: 'string',
+      description: 'Clean up objects after a delay.'
     })
     .option('repeat', {
       alias: 'r',

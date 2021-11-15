@@ -7,6 +7,7 @@ import JSZip from 'jszip'
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
 import { Arguments } from './args';
+import parseDuration from 'parse-duration';
 
 const s3 = new AWS.S3();
 
@@ -61,6 +62,20 @@ async function uploadData(data:Readable, id:string, ContentType:string, partSize
   }, {queueSize: 1, partSize}).promise()
 }
 
+async function cleanupData(delay:number, id:string) : Promise<void>{
+  return new Promise(async (resolve) => {
+    setTimeout(async () => {
+      const Bucket = 'jspitzig-cribl-test';
+      const Key = `multipart-test/${id}`;
+      await s3.deleteObject({
+        Bucket,
+        Key
+      }).promise()
+      resolve()
+    }, delay)
+  })
+}
+
 // Multipart
 export async function upload(args:Arguments, resolve:(error?:Error, result?:any)=>any) {
   for(let i = 0; (args.repeat < 0) || (i < args.repeat); i++) {
@@ -111,6 +126,14 @@ export async function upload(args:Arguments, resolve:(error?:Error, result?:any)
         default: throw new Error('Invalid upload type')
       }
       console.info('Uploaded archive');
+      if(args.cleanupDelay) {
+        const delay = parseDuration(args.cleanupDelay);
+        const cleanupPromise = cleanupData(delay, fileName);
+        if(args.repeat > 0 && i === args.repeat - 1) {
+          console.info('Awaiting cleanup');
+          await cleanupPromise;
+        }
+      }
     }
   }
   resolve(undefined, true);

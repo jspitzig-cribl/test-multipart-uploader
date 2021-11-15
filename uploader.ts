@@ -6,16 +6,7 @@ import JSZip from 'jszip'
 
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
-
-export interface Arguments {
-  format: string,
-  lines: number,
-  fileCount: number,
-  output?: string,
-  uploadType: string,
-  repeat: number,
-  workers: number
-}
+import { Arguments } from './args';
 
 const s3 = new AWS.S3();
 
